@@ -8,8 +8,9 @@
 //! - errors about a single datagram, or about an earlier send. The socket is
 //!   fine and the next receive works. [`is_per_datagram_error`] tells them
 //!   apart, and `UdpSocket::recv_from` skips them.
-//! - everything else (e.g. the kernel being out of memory). Those are
-//!   returned to the caller.
+//! - everything else (e.g. the kernel being out of memory). The socket is
+//!   usually fine again soon. `UdpSocket::recv_from_retrying` just tries
+//!   again.
 //!
 //! On Windows, sockets are also told not to report ICMP errors in the first
 //! place; see [`disable_udp_reset_errors`].

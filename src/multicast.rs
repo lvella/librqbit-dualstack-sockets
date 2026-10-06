@@ -76,6 +76,11 @@ impl MulticastUdpSocket {
         self.sock.recv_from(buf).await
     }
 
+    /// See [`crate::UdpSocket::recv_from_retrying`].
+    pub async fn recv_from_retrying(&self, buf: &mut [u8]) -> (usize, SocketAddr) {
+        self.sock.recv_from_retrying(buf).await
+    }
+
     pub async fn send_to(&self, buf: &[u8], addr: SocketAddr) -> std::io::Result<usize> {
         // Ensure the multicast option is erased before sending
         poll_fn(|cx| {

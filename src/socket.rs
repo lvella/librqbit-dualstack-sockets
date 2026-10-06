@@ -355,6 +355,10 @@ impl MaybeDualstackSocket<tokio::net::UdpSocket> {
     /// The skipped errors don't say which peer they are about, so they can't
     /// be used to detect a dead peer.
     ///
+    /// If this is called in a loop, and the loop is the only thing reading
+    /// the socket, consider [`Self::recv_from_retrying`], so that an error
+    /// doesn't end the loop.
+    ///
     /// This is cancel safe.
     pub async fn recv_from(&self, buf: &mut [u8]) -> std::io::Result<(usize, SocketAddr)> {
         loop {
@@ -364,6 +368,35 @@ impl MaybeDualstackSocket<tokio::net::UdpSocket> {
                     debug!("ignoring receive error: {e:#}");
                 }
                 Err(e) => return Err(e),
+            }
+        }
+    }
+
+    /// Like [`Self::recv_from`], but never fails: on error it logs and retries.
+    /// 
+    /// Useful for a persistent receive loop, where a single error shouldn't
+    /// end the loop, allowing for the socket to recover from transient errors,
+    /// such as the kernel being out of memory.
+    ///
+    /// This is cancel safe.
+    pub async fn recv_from_retrying(&self, buf: &mut [u8]) -> (usize, SocketAddr) {
+        let mut errors = 0usize;
+        loop {
+            match self.recv_from(buf).await {
+                Ok(received) => {
+                    if errors > 0 {
+                        tracing::info!(errors, "receiving again");
+                    }
+                    return received;
+                }
+                Err(e) if errors == 0 => {
+                    tracing::warn!("error receiving, retrying: {e:#}");
+                    errors = 1;
+                }
+                Err(e) => {
+                    debug!(errors, "error receiving, retrying: {e:#}");
+                    errors += 1;
+                }
             }
         }
     }

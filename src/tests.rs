@@ -530,6 +530,16 @@ async fn test_udp_recv_from_skips_per_datagram_errors() {
         .expect("recv_from() returned a per-datagram error");
     assert_eq!(&buf[..size], b"hello");
     assert_eq!(addr, peer.bind_addr());
+
+    // The retrying variant goes through the same path.
+    sock.send_to(b"nobody home", closed).await.unwrap();
+    tokio::time::sleep(Duration::from_millis(50)).await;
+    peer.send_to(b"again", sock.bind_addr()).await.unwrap();
+    let (size, addr) = timeout(TIMEOUT, sock.recv_from_retrying(&mut buf))
+        .await
+        .expect("timed out");
+    assert_eq!(&buf[..size], b"again");
+    assert_eq!(addr, peer.bind_addr());
 }
 
 /// The receive futures must be usable from tasks that move between threads.
@@ -540,6 +550,7 @@ async fn test_udp_recv_futures_are_send_and_sync() {
     let sock = UdpSocket::bind_udp(ipv4_localhost(), BindOpts::default()).unwrap();
     let mut buf = [0u8; 16];
     assert_send_sync(&sock.recv_from(&mut buf));
+    assert_send_sync(&sock.recv_from_retrying(&mut buf));
 
     let mcast = crate::MulticastUdpSocket::new(
         (Ipv6Addr::UNSPECIFIED, 0).into(),
@@ -551,6 +562,7 @@ async fn test_udp_recv_futures_are_send_and_sync() {
     .await
     .unwrap();
     assert_send_sync(&mcast.recv_from(&mut buf));
+    assert_send_sync(&mcast.recv_from_retrying(&mut buf));
 }
 
 /// Windows fails the receive of a datagram larger than the buffer with
